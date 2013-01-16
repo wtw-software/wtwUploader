@@ -1,4 +1,4 @@
-// Object for files
+// Object for filess
 function FileObject() {}
 
 // Should be used as a read-only object by user
