@@ -1,0 +1,13 @@
+#dropZone {
+	min-height: 300px;
+	border: 1px dotted #ccc;
+	padding: 10px;
+	cursor: move;
+}
+
+#dropZone2 {
+	min-height: 300px;
+	border: 1px dotted #ccc;
+	padding: 10px;
+	cursor: move;
+}
