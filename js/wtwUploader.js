@@ -1,280 +1,209 @@
-// Object for files
-function FileObject() {}
-
-// Should be used as a read-only object by user
-FileObject.prototype = {
-  id: null,
-  name: null,
-  size: null,
-  type: null,
-  fileListIndex: null,
-  fileListsIndex: null,
-  userData: {}
-};
-
-// The plugin
 (function( $ ) {
 
-  // Mime types that are supported by default,
-  // empty array means all types
-  var supports = [];
+  function FileObject() {
+    this.id = null
+    this.name = null
+    this.size = null
+    this.type = null
+    this.fileListIndex = null
+    this.fileListsIndex = null
+    this.userData = {}
+  }
 
-  // The methods that are supported by this plugin
-  var methods = {};
+  function Uploader( el, opts ) {
+    var self = this
+    this.el = el
+    this.options = opts
+    this.idCounter = 1
+    this.fileObjects = {}
+    this.fileLists = []
+    this.el.bind( 'dragover', dragoverHandler )
+    this.el.bind( 'drop', function() { 
+      dropHandler.apply(self, arguments) 
+    } )
+  }
 
-  // The handlers for the events
-  var handlers = {};
-
-  // Private methods/functions
-  var functions = {};
-
-  // Options given on init
-  var options = {};
-
-  // Dictionary of FileObjects (the files that will be uploaded)
-  var fileObjects = {};
-
-  // Array of files stored in FileLists (read-only object)
-  // Files here may never be uploaded (because the user choose to remove after drop)
-  var fileLists = [];
-
-  // Like an auto-increment counter for IDs
-  var idCounter = 1;
-
-  // Function to add files to upload object
-  functions.addFiles = function( files ) {
-    var added = [];
-
-    // We dont want to push empty array
-    if ( files.length == 0 ) {
-      return added;
+  Uploader.prototype.upload = function() {
+    for ( var id in this.fileObjects ) {
+      var fileObject = this.fileObjects[ id ]
+      var file = this.fileLists[ fileObject.fileListsIndex ][ fileObject.fileListIndex ]
+      POSTFile.call( this, file, fileObject.id, fileObject.userData )
     }
+    return this.el
+  }
 
-    fileLists.push( files );
-    fileListsIndex = fileLists.length - 1;
-    for ( var i in files ) {
-      fileListIndex = i;
-      var file = files[ i ];
-      var fileO = new FileObject();
-      var id = idCounter++; 
-      fileO.id = id;
-      fileO.name = file.name;
-      fileO.size = file.size;
-      fileO.type = file.type;
-      fileO.fileListsIndex = fileListsIndex;
-      fileO.fileListIndex = fileListIndex;
+  Uploader.prototype.removeAllFiles = function() {
+    this.fileObjects = {}
+    return this.el
+  }
 
-      // Adds the FileObject to be uploaded
-      fileObjects[ id ] = fileO;
-      added.push( fileO );
+  Uploader.prototype.removeFile = function( fileId ) {
+    if ( !fileId in this.fileObjects ) {
+      $.error( 'jQuery.wtwUploader method removeFile - invalid fileId' )
+      return this
     }
+    delete this.fileObjects[ fileId ]
+    return this.el
+  }
 
-    return added;
-  };
+  Uploader.prototype.setFileData = function( fileId, data ) {
+    if ( !fileId in this.fileObjects ) {
+      $.error( 'jQuery.wtwUploader method setFileData - invalid fileId' )
+      return this.el
+    }
+    this.fileObjects[ fileId ].userData = data
+    return this.el
+  }
 
-  functions.validate = function( file ) {
-    return (support.length == 0) ? true : file.type in support;
-  };
+  Uploader.prototype.getFileData = function( fileId ) {
+    if ( !fileId in this.fileObjects ) {
+      $.error( 'jQuery.wtwUploader method getFileData - invalid fileId' )
+      return null
+    }
+    return this.fileObjects[ fileId ].userData
+  }
 
-  // Function to POST a file
-  functions.POSTFile = function( file, id, data ) {
-    if ( typeof file != undefined && functions.validate(file) ) {
-      var form = new FormData();
-      form.append( file );
-      form.append( 'id', id );
+  Uploader.prototype.getFiles = function() {
+    return this.fileObjects
+  }
 
-      // Adds the userdata
-      for ( key in data ) {
-        form.append( key, data[key] );
+  function validate( file ) {
+    return ( !("supports" in this.options) || this.options.supports.length == 0 ) ?
+      true : file.type in this.options.supports
+  }
+
+  function dropHandler( e ) {
+    e.stopPropagation()
+    e.preventDefault()
+    var files = e.dataTransfer.files
+    var added = addFiles.call( this, files )
+    var success = true
+    if ( "postDrop" in this.options && $.isArray(this.options.postDrop) ) {
+      for ( var i in this.options.postDrop ) {
+        if ( this.options.postDrop[i](added) === false ) {
+          success = false
+          break
+        }
       }
+    } else if ( "postDrop" in this.options && 
+        this.options.postDrop(added) === false ) {
+      success = false
+    }
+    if ( !success ) {
+      for ( var i in added ) {
+        delete fileObjects[ added[i].id ]
+      }
+    }
+  }
 
-      var success = true;
-      // Checks for any preUpload function(s)
-      if ( preUpload in options && $.isArray(options.preUpload) ) {
-        for ( var i in options.preUpload ) {
-          if ( typeof options.preUpload[i] != 'function' ||
-            !options.preUpload[i](id) ) {
-            success = false;
-            break;
+  function dragoverHandler( e ) {
+    e.stopPropagation()
+    e.preventDefault()
+    return false
+  }
+
+  function POSTFile( file, id, data ) {
+    if ( typeof file != "undefined" && validate.call(this,file) ) {
+      var form = new FormData()
+      form.append( 'file', file )
+      form.append( 'id', id )
+      for ( key in data ) {
+        form.append( key, data[key] )
+      }
+      var success = true
+      if ( "preUpload" in this.options && $.isArray(this.options.preUpload) ) {
+        for ( var i in this.options.preUpload ) {
+          if ( this.options.preUpload[i](id) === false ) {
+            success = false
+            break
           }
         }
-      } else if ( typeof options.preUpload == 'function' ) {
-        if ( !options.preUpload(id) ) {
-          success = false;
-        }
+      } else if ( "preUpload" in this.options && 
+          this.options.preUpload(id) === false ) {
+        success = false
       }
       if ( success ) {
-        $.ajax({
+        $.ajax( {
           type: 'POST',
-          url: options.url,
+          url: this.options.url,
           data: form,
-          dataType: 'json', //options.dataType
+          dataType: 'json',
+          contentType: false,
+          cache: false,
+          processData: false,
           success: function( response ) {
-            if ( $.isEmptyObject(response) ||  
-                ("error" in response && 
-                uploadError in options &&
-                typeof options.uploadError == 'function') ) {
-                options.uploadError( response );
-            } else if ( postUpload in options &&
-                  typeof options.postUpload == 'function' ) {
-                options.postUpload( response );
+            if ( $.isEmptyObject(response) || !("id" in response) ) {
+              $.error( 'jQuery.wtwUploader - please follow guidelines for server-side upload script ')
+            } else {
+              this.removeFile( response.id )
+              if ( "error" in response ) {
+                if ( "uploadError" in this.options ) {
+                  this.options.uploadError( response.error )
+                }
+              } else if ( "postUpload" in this.options ) {
+                if ( "responseData" in response ) {
+                  this.options.postUpload( response.responseData )
+                } else {
+                  this.options.postUpload()
+                }
+              } else {
+                $.error( 'jQuery.wtwUploader - error uploading file ')
               }
             }
           }
-        });
-      } //else don't care
+        } )
+      } //else - do nothing
     } else {
-      $.error ( 'jQuery.wtwUploader - invalid file type - ' + file.name );
+      $.error( 'jQuery.wtwUploader - invalid file type - ' + file.name )
     }
-  };
-
-  // Handler for dragover
-  handlers.dragover = function( e ) {
-    e.stopPropagation();
-    e.preventDefault();
-    return false;
-  };
-
-  // Handler for dropping (adding) files
-  handlers.drop = function( e ) {
-    e.stopPropagation();
-    e.preventDefault();
-    var files = e.dataTransfer.files;
-
-    // We just add the files and then remove if postDrop doesn't return true
-    var added = functions.addFiles( files );
-
-    // Checks if there should be any postDrop functions(s)
-    // Typically for creating HTML that shows list of files etc
-    var success = true;
-    if ( postDrop in options && $.isArray(options.postDrop) ) {
-      for ( var i in options.postDrop ) {
-        if ( typeof options.postDrop[i] != 'function' || 
-          !options.postDrop[i](added) ) {
-          success = false;
-          break;
-        }
-      }
-    } else if ( typeof options.postDrop == 'function' ) {
-      if ( !options.postDrop(added) ) {
-        success = false;
-      }
-    }
-    if ( !succes ) {
-      for ( var i in added ) {
-        var id = added[i].id;
-        if ( id in fileObjects ) {
-          delete fileObjects[id];
-        }
-      }
-    }
-  };
-
-  // Init
-  methods.init = function( opts ) {
-    // Make options available for handlers and private functions
-    options = opts;
-
-    // We start by checking if every option is included
-    if ( false ) {
-      $.error ( 'jQuery.wtwUploader - options are missing' );
-      return this;
-    }
-
-    // Override default mime types if optional types are provided
-    if ( supports in options ) {
-      supports = options.supports;
-    }
-
-    // Bind event for dragover
-    $( this ).bind( 'dragover', dragover );
-
-    // Bind event for drop
-    $( this ).bind( 'drop', drop );
-
-    return this;
   }
 
-  // Method for uploading all files
-  methods.upload = function() {
-    for ( var id in fileObjects ) {
-      var fileO = fileObjects[ id ];
-      var file = fileLists[ fileO.fileListsIndex ][ fileO.fileListIndex ];
-      functions.POSTFile( file, fileO.id, fileO.userData );
+  function addFiles( files ) {
+    var added = []
+    if ( files.length == 0 ) {
+      return added
     }
-    return this;
-  };
-
-  // Method for removing all files
-  methods.removeAll = function() {
-    fileObjects = {};
-    return this;
-  };
-
-  // Method for removing one file
-  methods.removeFile = function( fileId ) {
-    if ( !fileId in fileObjects ) {
-      $.error( 'jQuery.wtwUploader method removeFile - invalid fileId' );
-      return this;
+    this.fileLists.push( files )
+    var fileListsIndex = this.fileLists.length - 1
+    for ( var i = files.length; i-- > 0; ) {
+      var file = files[ i ]
+      var fileObject = new FileObject()
+      var id = this.idCounter++
+      fileObject.id = id
+      fileObject.name = file.name
+      fileObject.size = file.size
+      fileObject.type = file.type
+      fileObject.fileListsIndex = fileListsIndex
+      fileObject.fileListIndex = i
+      this.fileObjects[ id ] = fileObject
+      added.push( fileObject )
     }
-    delete fileObjects[ fileId ];
-    return this;
-  };
-
-  // Method that lets the plugin-user set data to files,
-  // that will be posted in the ajax
-  methods.setData = function( fileId, data ) {
-    if ( !fileId in fileObjects ) {
-      $.error( 'jQuery.wtwUploader method setData - invalid fileId' );
-      return this;
-    }
-    fileObjects[ fileId ].userData = data;
-    return this;
-  };
-
-  // Method to get data on a file - not chainable
-  methods.getData = function( fileId ) {
-    if ( !fileId in fileObjects ) {
-      $.error( 'jQuery.wtwUploader method getData - invalid fileId' );
-      return null;
-    }
-    return fileObjects[ fileId ].userData;
-  };
+    return added
+  }
 
   $.fn.wtwUploader = function( method ) {
-    // Checks browser support
-    if ( ! ( window.File && 
-             window.FileReader && 
-             window.FileList && 
-             window.Blob ) ) {
+    if ( !(window.File && window.FileReader && window.FileList && window.Blob) ) {
       $.error ( 'No browser support for jQuery.wtwUploader' );
     } else {
-      if ( methods[ method ] ) {
-        return methods[ method ].apply( this, Array.prototype.slice.call( arguments, 1 ));
-      } else if ( typeof method === 'object' || ! method ) {
-        return methods.init.apply( this, arguments );
+      var uploader = this.data( 'wtwUploader' );
+      if ( method === 'destroy' && uploader ) {
+        uploader.el.unbind()
+        $( this ).removeData( 'wtwUploader' )
+        return this
+      } else if ( !uploader ) {
+        if ( typeof method !== 'object' || !("url" in method) ) {
+          $.error( 'jQuery.wtwUploader needs to init with required options for element ' + $(this).selector )
+          return this
+        } else {
+          uploader = new Uploader( $(this), method );
+          $( this ).data( 'wtwUploader', uploader )
+          return this
+        }
+      } else if ( Uploader.prototype.hasOwnProperty(method) ) {
+        return uploader[ method ].apply( uploader, Array.prototype.slice.call(arguments, 1) )
       } else {
         $.error( 'Method ' +  method + ' does not exist on jQuery.wtwUploader' );
       }
     } 
-  };
-} )( jQuery );
-
-
-/* Dont need this
-  functions.guid = function() {
-    var S4 = function() {
-      return Math.floor(
-        Math.random() * 0x10000
-        ).toString(16);
-    };
-
-    return (
-      S4() + S4() + "-" +
-      S4() + "-" +
-      S4() + "-" +
-      S4() + "-" +
-      S4() + S4() + S4()
-    );
   }
-  */
+} )( jQuery )
