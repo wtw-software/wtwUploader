@@ -1,5 +1,8 @@
 (function( $ ) {
-
+  $.event.props.push( 'dataTransfer' )
+  //$.support.xhrFileUpload = !!(window.XMLHttpRequestUpload && window.FileReader);
+  //$.support.xhrFormDataFileUpload = !!window.FormData;
+  
   function FileObject() {
     this.id = null
     this.name = null
@@ -23,7 +26,18 @@
     } )
   }
 
-  Uploader.prototype.upload = function() {
+  Uploader.prototype.uploadFile = function( fileId ) {
+    if ( !(fileId in this.fileObjects) ) {
+      $.error( 'jQuery.wtwUploader method uploadFile - invalid fileId' )
+      return this.el
+    }
+    var fileObject = this.fileObjects[ fileId ]
+    var file = this.fileLists[ fileObject.fileListsIndex ][ fileObject.fileListIndex ]
+    POSTFile.call( this, file, fileObject.id, fileObject.userData )
+    return this.el
+  }
+
+  Uploader.prototype.uploadFiles = function() {
     for ( var id in this.fileObjects ) {
       var fileObject = this.fileObjects[ id ]
       var file = this.fileLists[ fileObject.fileListsIndex ][ fileObject.fileListIndex ]
@@ -32,22 +46,22 @@
     return this.el
   }
 
-  Uploader.prototype.removeAllFiles = function() {
+  Uploader.prototype.removeFiles = function() {
     this.fileObjects = {}
     return this.el
   }
 
   Uploader.prototype.removeFile = function( fileId ) {
-    if ( !fileId in this.fileObjects ) {
+    if ( !(fileId in this.fileObjects) ) {
       $.error( 'jQuery.wtwUploader method removeFile - invalid fileId' )
-      return this
+      return this.el
     }
     delete this.fileObjects[ fileId ]
     return this.el
   }
 
   Uploader.prototype.setFileData = function( fileId, data ) {
-    if ( !fileId in this.fileObjects ) {
+    if ( !(fileId in this.fileObjects) ) {
       $.error( 'jQuery.wtwUploader method setFileData - invalid fileId' )
       return this.el
     }
@@ -56,15 +70,26 @@
   }
 
   Uploader.prototype.getFileData = function( fileId ) {
-    if ( !fileId in this.fileObjects ) {
+    if ( !(fileId in this.fileObjects) ) {
       $.error( 'jQuery.wtwUploader method getFileData - invalid fileId' )
       return null
     }
-    return this.fileObjects[ fileId ].userData
+    var copy = $.extend( true, {}, this.fileObjects[ fileId ].userData )
+    return copy
   }
 
   Uploader.prototype.getFiles = function() {
-    return this.fileObjects
+    var copy = $.extend( true, {}, this.fileObjects)
+    return copy
+  }
+
+  Uploader.prototype.getFile = function( fileId ) {
+    if ( !(fileId in this.fileObjects) ) {
+      $.error( 'jQuery.wtwUploader method getFile - invalid fileId' )
+      return null
+    }
+    var copy = $.extend( true, {}, this.fileObjects[ fileId ])
+    return copy
   }
 
   function validate( file ) {
@@ -102,6 +127,18 @@
     return false
   }
 
+  function ajaxSuccess( response, id ) {
+    var file = this.getFile( id )
+    this.removeFile( id )
+    if ( "postUpload" in this.options && $.isArray(this.options.postUpload) ) {
+      for ( var i in this.options.postUpload ) {
+        this.options.postUpload[ i ]( file, response )
+      }
+    } else if ( "postUpload" in this.options ) {
+      this.options.postUpload( file, response )
+    }
+  }
+
   function POSTFile( file, id, data ) {
     if ( typeof file != "undefined" && validate.call(this,file) ) {
       var form = new FormData()
@@ -123,6 +160,7 @@
         success = false
       }
       if ( success ) {
+        var self = this
         $.ajax( {
           type: 'POST',
           url: this.options.url,
@@ -131,26 +169,9 @@
           contentType: false,
           cache: false,
           processData: false,
-          success: function( response ) {
-            if ( $.isEmptyObject(response) || !("id" in response) ) {
-              $.error( 'jQuery.wtwUploader - please follow guidelines for server-side upload script ')
-            } else {
-              this.removeFile( response.id )
-              if ( "error" in response ) {
-                if ( "uploadError" in this.options ) {
-                  this.options.uploadError( response.error )
-                }
-              } else if ( "postUpload" in this.options ) {
-                if ( "responseData" in response ) {
-                  this.options.postUpload( response.responseData )
-                } else {
-                  this.options.postUpload()
-                }
-              } else {
-                $.error( 'jQuery.wtwUploader - error uploading file ')
-              }
+          success: function( response ) { 
+            ajaxSuccess.call( self, response, id ) 
             }
-          }
         } )
       } //else - do nothing
     } else {
@@ -207,3 +228,5 @@
     } 
   }
 } )( jQuery )
+
+//TODO: have som type of invalidFile cb

@@ -1,62 +1,55 @@
 <!DOCTYPE>
 <html>
 <head>
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<title>WTWUploader</title>
-<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.0/jquery.min.js"></script>
-<script type="text/javascript" src="js/wtwUploader.js"></script>
-<script type="text/javascript">
-/*
-postDrop = function( files ) {
-	return true;
-};
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+	<title>WTWUploader</title>
+	<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.0/jquery.min.js"></script>
+	<script type="text/javascript" src="js/wtwUploader.js"></script>
+	<script type="text/javascript">
+	$( document ).ready( function() {
+		$( "#dropZone" ).wtwUploader( {
+			url: "upload.php",
+			postUpload: postUpload,
+			postDrop: postDrop,
+			preUpload: preUpload
+		} );
+		$( "#upload" ).click(function() {
+			$( "#dropZone" ).wtwUploader( 'uploadFiles' )
+		})
+	})
 
-postUpload = function( response ) {
-	$( "#file_" + response.id ).slideUp( "normal", function() {
-		$( this ).remove();
-	} );
-	$( "#dropZone" ).wtwUploader( "removeFile", reponse.id );
-};
+	// Add a representation (HTML) of the files
+	function postDrop( files ) {
+		for ( var i = files.length; i-- > 0; ) {
+			var $dfile = $( "<div class='dfile' id='"+files[i].id+"'>" )
+			var $dlabel = $( "<label>" )
+			$dlabel.html( files[i].name )
+			$dfile.append( "<img src='images/image.png' class='prev' />" )
+			$dfile.append( $dlabel );
+			$( "#dropZone" ).append( $dfile );
+		}
+	}
 
-preUpload = function( id ) {
-	
-};
+	// Remove uploaded file from the list
+	function postUpload( file, response ) {
+		$( "#"+file.id ).slideUp( "normal", function() { $( this ).remove()} )
+	}
 
-uploadError = function( response ) {
-	$( "#dropZone" ).wtwUploader( "removeAll" );
-	$( ".dFile" ).remove();
-}
+	// Add animation
+	function preUpload( id ) {
+		console.log(id)
+		$( "#"+id ).append( $("<img src='images/ajax-loader.gif' class='progress' />") )
+	}
 
-var options = {
-	supports: [
-	 'image/jpg',
-	 'image/jpeg',
-	 'image/png'
-	 ],
-	url: 'upload.php',
-	postDrop: postDrop,
-	postUpload: postUpload,
-	preUpload: preUpload,
-	uploadError: uploadError
-};
-*/
-
-
-$( document ).ready( function() {
-	$.event.props.push('dataTransfer');
-	$("#dropZone").wtwUploader({url: "upload.php"});
-});
-</script>
-<link href="css/style.css" type="text/css" rel="stylesheet" />
+	</script>
+	<link href="css/style.css" type="text/css" rel="stylesheet" />
 </head>
 <body lang="en">
-<div id="dropZone" class="uploadArea">
-	
-</div>
-<input type="button" value="Upload files" />
-<div id="dropZone2" class="uploadArea">
-	
-</div>
-<input type="button" value="Upload files" />
+	<div id="content">
+		<div id="dropZone" class="uploadArea">
+			<div class="title">Drop files here</div>
+		</div>
+		<input type="button" value="Upload files" id="upload" />
+	</div>
 </body>
 </html>
